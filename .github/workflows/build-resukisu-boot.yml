@@ -1,0 +1,109 @@
+name: Build ReSukiSU boot.img (xpeng)
+
+on:
+  schedule:
+    # Every Sunday 00:00 UTC (~ weekly)
+    - cron: "0 0 * * 0"
+  workflow_dispatch:
+    inputs:
+      update_resukisu:
+        description: "Update ReSukiSU submodule to latest main"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-resukisu-boot
+  cancel-in-progress: true
+
+env:
+  KERNEL_REPO: https://github.com/LuoJuly/android_kernel_motorola_sm7325.git
+  KERNEL_BRANCH: lineage-23.2-ReSukiSU
+
+jobs:
+  build:
+    name: Build & Release
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost \
+            /usr/share/swift || true
+          sudo apt-get clean
+          df -h
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bison flex bc libssl-dev libelf-dev cpio \
+            python3 curl ca-certificates git rsync xz-utils
+
+      - name: Checkout build scripts
+        uses: actions/checkout@v4
+
+      - name: Clone kernel source
+        run: |
+          rm -rf kernel
+          git clone --recursive --branch "${KERNEL_BRANCH}" "${KERNEL_REPO}" kernel
+          # Full KernelSU history for accurate version counting
+          git -C kernel/KernelSU fetch --unshallow origin 2>/dev/null || true
+
+      - name: Cache toolchain
+        uses: actions/cache@v4
+        with:
+          path: kernel/.ci-toolchain
+          key: toolchain-clang-r563880c-magisk
+          restore-keys: |
+            toolchain-clang-r563880c-
+
+      - name: Build kernel and repack boot.img
+        id: build
+        working-directory: kernel
+        env:
+          DEVICE: xpeng
+          CLANG_VERSION: clang-r563880c
+          UPDATE_RESUKISU: ${{ github.event_name == 'schedule' || inputs.update_resukisu }}
+        run: |
+          mkdir -p scripts/ci
+          cp -f "${GITHUB_WORKSPACE}/scripts/ci/build_resukisu_boot.sh" scripts/ci/
+          chmod +x scripts/ci/build_resukisu_boot.sh
+          scripts/ci/build_resukisu_boot.sh
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xpeng-resukisu-boot-${{ env.LOS_DATE }}
+          path: |
+            kernel/.ci-work/release/*.img
+            kernel/.ci-work/release/Image
+            kernel/.ci-work/release/kernel
+            kernel/.ci-work/release/RELEASE_NOTES.md
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_NAME }}
+          body_path: kernel/.ci-work/release/RELEASE_NOTES.md
+          files: |
+            kernel/.ci-work/release/boot-*.img
+            kernel/.ci-work/release/Image
+          draft: false
+          prerelease: false
+          make_latest: true
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
