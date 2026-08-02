@@ -1,6 +1,6 @@
 name: Build ReSukiSU boot.img (xpeng)
 
-on:
+"on":
   schedule:
     # Every Sunday 00:00 UTC (~ weekly)
     - cron: "0 0 * * 0"
