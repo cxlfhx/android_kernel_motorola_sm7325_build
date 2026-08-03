@@ -275,9 +275,18 @@ repack_boot() {
 
   popd >/dev/null
 
-  RELEASE_TAG="ReSukiSU-${safe_ver}-LOS-${LOS_DATE}"
+  # Unique tag per CI run so each Release is kept (same LOS/ReSukiSU must not overwrite)
+  local build_id
+  if [[ -n "${GITHUB_RUN_NUMBER:-}" ]]; then
+    build_id="r${GITHUB_RUN_NUMBER}"
+  elif [[ -n "${GITHUB_RUN_ID:-}" ]]; then
+    build_id="r${GITHUB_RUN_ID}"
+  else
+    build_id="$(date -u +%Y%m%d%H%M%S)"
+  fi
+  RELEASE_TAG="ReSukiSU-${safe_ver}-LOS-${LOS_DATE}-${build_id}"
   RESUKISU_DISPLAY="${RESUKISU_DISPLAY:-$(cat "${WORK_DIR}/resukisu_display.txt" 2>/dev/null || echo "${RESUKISU_VERSION}@ReSukiSU")}"
-  RELEASE_NAME="xpeng ${RESUKISU_DISPLAY} + LineageOS ${LOS_DATE}"
+  RELEASE_NAME="xpeng ${RESUKISU_DISPLAY} + LineageOS ${LOS_DATE} (${build_id})"
   BOOT_ARTIFACT="${WORK_DIR}/release/${out_name}"
   export RELEASE_TAG RELEASE_NAME BOOT_ARTIFACT
 

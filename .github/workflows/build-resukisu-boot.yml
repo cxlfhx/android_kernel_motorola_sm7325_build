@@ -93,6 +93,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      # Each run uses a unique RELEASE_TAG (...-rN) so prior Releases are never overwritten.
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
