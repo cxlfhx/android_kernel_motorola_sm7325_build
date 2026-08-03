@@ -270,12 +270,27 @@ repack_boot() {
   endlog
 }
 
+pack_anykernel3() {
+  log "Pack AnyKernel3 zip"
+  local pack_script
+  pack_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pack_anykernel3.sh"
+  [[ -f "${pack_script}" ]] || die "missing ${pack_script}"
+  # shellcheck disable=SC1090
+  ROOT_DIR="${ROOT_DIR}" WORK_DIR="${WORK_DIR}" DEVICE="${DEVICE}" \
+    RESUKISU_VERSION="${RESUKISU_VERSION:-}" LOS_DATE="${LOS_DATE:-}" \
+    GITHUB_PROXY="${GITHUB_PROXY:-}" \
+    KERNEL_IMAGE="${WORK_DIR}/release/Image" \
+    bash "${pack_script}"
+  endlog
+}
+
 write_release_notes() {
   RESUKISU_VERSION="${RESUKISU_VERSION:-$(cat "${WORK_DIR}/resukisu_version.txt")}"
   LOS_DATE="${LOS_DATE:-$(cat "${WORK_DIR}/los_date.txt")}"
   LOS_FILENAME="${LOS_FILENAME:-$(cat "${WORK_DIR}/los_filename.txt")}"
+  AK3_COMMIT="${AK3_COMMIT:-$(cat "${WORK_DIR}/ak3_commit.txt" 2>/dev/null || echo unknown)}"
   cat > "${WORK_DIR}/release/RELEASE_NOTES.md" <<EOF
-## xpeng ReSukiSU boot.img
+## xpeng ReSukiSU kernel
 
 | Item | Value |
 |------|-------|
@@ -283,17 +298,28 @@ write_release_notes() {
 | ReSukiSU | \`${RESUKISU_VERSION}\` |
 | LineageOS date | \`${LOS_DATE}\` |
 | Base ROM | \`${LOS_FILENAME}\` |
+| AnyKernel3 | [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3) \`${AK3_COMMIT}\` |
 | Kernel configs | \`vendor/lahaina-qgki_defconfig\` + \`vendor/lineage_moto-lahaina.config\` + \`vendor/lineage_xpeng.config\` |
 | Clang | \`${CLANG_VERSION}\` |
 
-### Flash
+### Assets
+
+- \`boot-*.img\` — LineageOS boot.img with replaced kernel (fastboot)
+- \`AnyKernel3-*.zip\` — flashable zip for recovery / Kernel Flasher (any ROM)
+- \`Image\` — raw kernel image
+
+### Flash (AnyKernel3, recommended for other ROMs)
+
+Sideload or flash \`AnyKernel3-*.zip\` in a custom recovery, or use a kernel flasher app.
+
+### Flash (LineageOS boot.img)
 
 \`\`\`bash
 fastboot flash boot boot-*.img
 fastboot reboot
 \`\`\`
 
-> Built automatically from \`lineage-23.2-ReSukiSU\` with the latest ReSukiSU submodule and the newest official LineageOS boot.img for xpeng.
+> Built automatically from \`lineage-23.2-ReSukiSU\` with the latest ReSukiSU submodule, latest AnyKernel3 upstream, and the newest official LineageOS boot.img for xpeng.
 EOF
   gh_env RELEASE_NOTES "${WORK_DIR}/release/RELEASE_NOTES.md"
 }
@@ -315,6 +341,11 @@ main() {
   fetch_boot_img
   setup_magiskboot
   repack_boot
+  pack_anykernel3
+  # Persist AK3 commit for notes if pack script exported it
+  if [[ -n "${AK3_COMMIT:-}" ]]; then
+    printf '%s\n' "${AK3_COMMIT}" > "${WORK_DIR}/ak3_commit.txt"
+  fi
   write_release_notes
   info "Done."
 }

@@ -46,7 +46,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            bison flex bc libssl-dev libelf-dev cpio \
+            bison flex bc libssl-dev libelf-dev cpio zip \
             python3 curl ca-certificates git rsync xz-utils
 
       - name: Checkout build scripts
@@ -67,7 +67,7 @@ jobs:
           restore-keys: |
             toolchain-clang-r563880c-
 
-      - name: Build kernel and repack boot.img
+      - name: Build kernel, boot.img and AnyKernel3
         id: build
         working-directory: kernel
         env:
@@ -76,8 +76,8 @@ jobs:
           UPDATE_RESUKISU: ${{ github.event_name == 'schedule' || inputs.update_resukisu }}
         run: |
           mkdir -p scripts/ci
-          cp -f "${GITHUB_WORKSPACE}/scripts/ci/build_resukisu_boot.sh" scripts/ci/
-          chmod +x scripts/ci/build_resukisu_boot.sh
+          cp -f "${GITHUB_WORKSPACE}/scripts/ci/"*.sh scripts/ci/
+          chmod +x scripts/ci/*.sh
           scripts/ci/build_resukisu_boot.sh
 
       - name: Upload build artifacts
@@ -86,6 +86,7 @@ jobs:
           name: xpeng-resukisu-boot-${{ env.LOS_DATE }}
           path: |
             kernel/.ci-work/release/*.img
+            kernel/.ci-work/release/*.zip
             kernel/.ci-work/release/Image
             kernel/.ci-work/release/kernel
             kernel/.ci-work/release/RELEASE_NOTES.md
@@ -100,6 +101,7 @@ jobs:
           body_path: kernel/.ci-work/release/RELEASE_NOTES.md
           files: |
             kernel/.ci-work/release/boot-*.img
+            kernel/.ci-work/release/AnyKernel3-*.zip
             kernel/.ci-work/release/Image
           draft: false
           prerelease: false
