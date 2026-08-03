@@ -60,11 +60,30 @@ update_resukisu() {
 
   RESUKISU_VERSION="$(git -C KernelSU describe --tags --always)"
   RESUKISU_SHA="$(git -C KernelSU rev-parse --short=8 HEAD)"
-  info "ReSukiSU: ${RESUKISU_VERSION} (${RESUKISU_SHA})"
+  # Match ReSukiSU Kbuild: KSU_VERSION = 30000 + rev-list-count + 700
+  local ksu_count
+  ksu_count="$(git -C KernelSU rev-list --count HEAD)"
+  KSU_VERSION="$((30000 + ksu_count + 700))"
+  # UAPI version from ReSukiSU headers (manager shows as VERSION/UAPI)
+  KSU_UAPI_VERSION="$(
+    sed -nE 's/.*KERNEL_SU_UAPI_VERSION[[:space:]]*=[[:space:]]*([0-9]+).*/\1/p' \
+      KernelSU/uapi/supercall.h 2>/dev/null | head -1
+  )"
+  KSU_UAPI_VERSION="${KSU_UAPI_VERSION:-2}"
+  # e.g. v4.1.0-1332-g59c99fdf@ReSukiSU (35046/2)
+  RESUKISU_DISPLAY="${RESUKISU_VERSION}@ReSukiSU (${KSU_VERSION}/${KSU_UAPI_VERSION})"
+
+  info "ReSukiSU: ${RESUKISU_DISPLAY}"
   gh_env RESUKISU_VERSION "${RESUKISU_VERSION}"
   gh_env RESUKISU_SHA "${RESUKISU_SHA}"
-  export RESUKISU_VERSION RESUKISU_SHA
+  gh_env KSU_VERSION "${KSU_VERSION}"
+  gh_env KSU_UAPI_VERSION "${KSU_UAPI_VERSION}"
+  gh_env RESUKISU_DISPLAY "${RESUKISU_DISPLAY}"
+  export RESUKISU_VERSION RESUKISU_SHA KSU_VERSION KSU_UAPI_VERSION RESUKISU_DISPLAY
   printf '%s\n' "${RESUKISU_VERSION}" > "${WORK_DIR}/resukisu_version.txt"
+  printf '%s\n' "${RESUKISU_DISPLAY}" > "${WORK_DIR}/resukisu_display.txt"
+  printf '%s\n' "${KSU_VERSION}" > "${WORK_DIR}/ksu_version.txt"
+  printf '%s\n' "${KSU_UAPI_VERSION}" > "${WORK_DIR}/ksu_uapi_version.txt"
   endlog
 }
 
@@ -257,7 +276,8 @@ repack_boot() {
   popd >/dev/null
 
   RELEASE_TAG="ReSukiSU-${safe_ver}-LOS-${LOS_DATE}"
-  RELEASE_NAME="xpeng ReSukiSU ${RESUKISU_VERSION} + LineageOS ${LOS_DATE}"
+  RESUKISU_DISPLAY="${RESUKISU_DISPLAY:-$(cat "${WORK_DIR}/resukisu_display.txt" 2>/dev/null || echo "${RESUKISU_VERSION}@ReSukiSU")}"
+  RELEASE_NAME="xpeng ${RESUKISU_DISPLAY} + LineageOS ${LOS_DATE}"
   BOOT_ARTIFACT="${WORK_DIR}/release/${out_name}"
   export RELEASE_TAG RELEASE_NAME BOOT_ARTIFACT
 
@@ -277,7 +297,9 @@ pack_anykernel3() {
   [[ -f "${pack_script}" ]] || die "missing ${pack_script}"
   # shellcheck disable=SC1090
   ROOT_DIR="${ROOT_DIR}" WORK_DIR="${WORK_DIR}" DEVICE="${DEVICE}" \
-    RESUKISU_VERSION="${RESUKISU_VERSION:-}" LOS_DATE="${LOS_DATE:-}" \
+    RESUKISU_VERSION="${RESUKISU_VERSION:-}" \
+    RESUKISU_DISPLAY="${RESUKISU_DISPLAY:-}" \
+    LOS_DATE="${LOS_DATE:-}" \
     GITHUB_PROXY="${GITHUB_PROXY:-}" \
     KERNEL_IMAGE="${WORK_DIR}/release/Image" \
     bash "${pack_script}"
@@ -286,6 +308,7 @@ pack_anykernel3() {
 
 write_release_notes() {
   RESUKISU_VERSION="${RESUKISU_VERSION:-$(cat "${WORK_DIR}/resukisu_version.txt")}"
+  RESUKISU_DISPLAY="${RESUKISU_DISPLAY:-$(cat "${WORK_DIR}/resukisu_display.txt" 2>/dev/null || echo "${RESUKISU_VERSION}@ReSukiSU")}"
   LOS_DATE="${LOS_DATE:-$(cat "${WORK_DIR}/los_date.txt")}"
   LOS_FILENAME="${LOS_FILENAME:-$(cat "${WORK_DIR}/los_filename.txt")}"
   AK3_COMMIT="${AK3_COMMIT:-$(cat "${WORK_DIR}/ak3_commit.txt" 2>/dev/null || echo unknown)}"
@@ -295,7 +318,7 @@ write_release_notes() {
 | Item | Value |
 |------|-------|
 | Device | ${DEVICE} |
-| ReSukiSU | \`${RESUKISU_VERSION}\` |
+| ReSukiSU | \`${RESUKISU_DISPLAY}\` |
 | LineageOS date | \`${LOS_DATE}\` |
 | Base ROM | \`${LOS_FILENAME}\` |
 | AnyKernel3 | [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3) \`${AK3_COMMIT}\` |

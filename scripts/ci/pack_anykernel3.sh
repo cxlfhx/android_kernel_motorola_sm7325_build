@@ -38,27 +38,17 @@ resolve_image() {
 }
 
 clone_anykernel3() {
-  local urls=()
+  local url="${AK3_REPO}"
   if [[ -n "${GITHUB_PROXY:-}" ]]; then
-    case "${AK3_REPO}" in
-      https://github.com/*) urls+=("${GITHUB_PROXY%/}/${AK3_REPO}") ;;
+    # https://gh-proxy.com/https://github.com/...
+    case "${url}" in
+      https://github.com/*) url="${GITHUB_PROXY%/}/${url}" ;;
     esac
   fi
-  urls+=("${AK3_REPO}")
 
   rm -rf "${AK3_DIR}"
-  local url ok=0
-  for url in "${urls[@]}"; do
-    info "Cloning AnyKernel3 (${AK3_REF}) from ${url}"
-    if git clone --depth=1 --branch "${AK3_REF}" "${url}" "${AK3_DIR}"; then
-      ok=1
-      break
-    fi
-    rm -rf "${AK3_DIR}"
-    info "Clone failed, trying next mirror..."
-  done
-  [[ "${ok}" -eq 1 ]] || die "failed to clone AnyKernel3"
-
+  info "Cloning AnyKernel3 (${AK3_REF}) from ${url}"
+  git clone --depth=1 --branch "${AK3_REF}" "${url}" "${AK3_DIR}"
   AK3_COMMIT="$(git -C "${AK3_DIR}" rev-parse --short=8 HEAD)"
   AK3_DESCRIBE="$(git -C "${AK3_DIR}" describe --tags --always 2>/dev/null || echo "${AK3_COMMIT}")"
   export AK3_COMMIT AK3_DESCRIBE
@@ -68,7 +58,7 @@ clone_anykernel3() {
 }
 
 write_anykernel_sh() {
-  local resukisu_ver="${RESUKISU_VERSION:-unknown}"
+  local resukisu_ver="${RESUKISU_DISPLAY:-${RESUKISU_VERSION:-unknown}}"
   local los_date="${LOS_DATE:-unknown}"
   cat > "${AK3_DIR}/anykernel.sh" <<EOF
 ### AnyKernel3 Ramdisk Mod Script
@@ -78,7 +68,7 @@ write_anykernel_sh() {
 ### AnyKernel setup
 # global properties
 properties() { '
-kernel.string=xpeng ReSukiSU ${resukisu_ver} (LOS ${los_date})
+kernel.string=xpeng ${resukisu_ver} (LOS ${los_date})
 do.devicecheck=1
 do.modules=0
 do.systemless=1
@@ -133,6 +123,7 @@ pack_zip() {
   cp -f "${image}" "${AK3_DIR}/Image"
 
   RESUKISU_VERSION="${RESUKISU_VERSION:-$(cat "${WORK_DIR}/resukisu_version.txt" 2>/dev/null || echo unknown)}"
+  RESUKISU_DISPLAY="${RESUKISU_DISPLAY:-$(cat "${WORK_DIR}/resukisu_display.txt" 2>/dev/null || echo "${RESUKISU_VERSION}@ReSukiSU")}"
   LOS_DATE="${LOS_DATE:-$(cat "${WORK_DIR}/los_date.txt" 2>/dev/null || echo unknown)}"
   local safe_ver
   safe_ver="$(echo "${RESUKISU_VERSION}" | tr '/:' '--')"
@@ -172,10 +163,13 @@ main() {
   if [[ -z "${RESUKISU_VERSION:-}" && -f "${WORK_DIR}/resukisu_version.txt" ]]; then
     RESUKISU_VERSION="$(cat "${WORK_DIR}/resukisu_version.txt")"
   fi
+  if [[ -z "${RESUKISU_DISPLAY:-}" && -f "${WORK_DIR}/resukisu_display.txt" ]]; then
+    RESUKISU_DISPLAY="$(cat "${WORK_DIR}/resukisu_display.txt")"
+  fi
   if [[ -z "${LOS_DATE:-}" && -f "${WORK_DIR}/los_date.txt" ]]; then
     LOS_DATE="$(cat "${WORK_DIR}/los_date.txt")"
   fi
-  export RESUKISU_VERSION LOS_DATE
+  export RESUKISU_VERSION RESUKISU_DISPLAY LOS_DATE
 
   clone_anykernel3
   write_anykernel_sh
