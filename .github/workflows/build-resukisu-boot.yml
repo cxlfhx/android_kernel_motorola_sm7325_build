@@ -21,7 +21,7 @@ concurrency:
 
 env:
   KERNEL_REPO: https://github.com/LuoJuly/android_kernel_motorola_sm7325.git
-  KERNEL_BRANCH: lineage-23.2-ReSukiSU
+  KERNEL_BRANCH: lineage-23.2-SUSFS 
 
 jobs:
   build:
